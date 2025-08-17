@@ -1,4 +1,4 @@
-﻿# IIS Configuration Script
+# IIS Configuration Script
 # Sử dụng: .\configure_iis.ps1 -IPAddress "192.168.1.100" -Domain "example.com" -WebsitePath "C:\inetpub\wwwroot\mysite" -SiteName "MyWebsite"
 
 param(
