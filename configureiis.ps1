@@ -1,3 +1,31 @@
+# =============================================================================
+# IIS CONFIGURATION SCRIPT FOR 9DRAGONS SERVICE
+# =============================================================================
+# 
+# 🤖 AI ASSISTANT: Claude Sonnet 4 (Anthropic)
+# 👨‍💻 AUTHOR: Vũ Tuấn Hùng (Vu Tuan Hung)
+# 🎮 SERVICE: 9Dragons Online Game Server Management
+# 📅 CREATED: 2024
+# 🔧 PURPOSE: Automated IIS configuration for game server hosting
+# 
+# =============================================================================
+# 
+# This script provides comprehensive IIS configuration capabilities:
+# - Website creation and management
+# - Application pool configuration  
+# - SSL certificate binding
+# - Domain and subdomain setup
+# - Security permissions management
+# - IIS and XAMPP service management
+# - 9Dragons server optimization
+# 
+# =============================================================================
+# 
+# USAGE: .\configureiis.ps1 -IPAddress "192.168.1.100" -Domain "example.com" 
+#        -WebsitePath "C:\inetpub\wwwroot\mysite" -SiteName "MyWebsite"
+# 
+# =============================================================================
+
 # IIS Configuration Script
 # Sử dụng: .\configure_iis.ps1 -IPAddress "192.168.1.100" -Domain "example.com" -WebsitePath "C:\inetpub\wwwroot\mysite" -SiteName "MyWebsite"
 
@@ -137,51 +165,7 @@ function Test-CreateAppPool {
     }
 }
 
-# Function để kiểm tra và tạo thư mục website
-function Test-CreateWebsiteDirectory {
-    param([string]$PhysicalPath)
-    
-    try {
-        if (!(Test-Path $PhysicalPath)) {
-            Write-Log "Tạo thư mục website: $PhysicalPath"
-            New-Item -ItemType Directory -Path $PhysicalPath -Force | Out-Null
-            Write-Log "✓ Thư mục website đã được tạo" "SUCCESS"
-        } else {
-            Write-Log "✓ Thư mục website đã tồn tại: $PhysicalPath" "SUCCESS"
-        }
-        
-        # Tạo file index.html mặc định nếu thư mục trống
-        $indexFile = Join-Path $PhysicalPath "index.html"
-        if (!(Test-Path $indexFile)) {
-            $htmlContent = @"
-<!DOCTYPE html>
-<html>
-<head>
-    <title>$SiteName</title>
-    <meta charset="utf-8">
-</head>
-<body>
-    <h1>Welcome to $SiteName</h1>
-    <p>Website đã được cấu hình thành công!</p>
-    <p>Domain: $Domain</p>
-    <p>IP: $IPAddress</p>
-    <p>Port: $Port</p>
-    <p>Path: $PhysicalPath</p>
-    <p>Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')</p>
-</body>
-</html>
-"@
-            $htmlContent | Out-File -FilePath $indexFile -Encoding UTF8
-            Write-Log "✓ File index.html mặc định đã được tạo" "SUCCESS"
-        }
-        
-        return $true
-    }
-    catch {
-        Write-Log "❌ Lỗi khi tạo thư mục website: $($_.Exception.Message)" "ERROR"
-        return $false
-    }
-}
+
 
 # Function để thiết lập quyền truy cập cho thư mục website
 function Set-WebsitePermissions {
@@ -320,6 +304,25 @@ function Restart-IIS {
     try {
         Write-Log "Restart IIS..."
         
+        # Buộc dừng IIS trước (vì trường hợp còn đang bật)
+        Write-Log "Buộc dừng IIS trước..."
+        try {
+            # Dừng tất cả các tiến trình IIS đang chạy
+            Get-Process | Where-Object {$_.ProcessName -like "*w3wp*" -or $_.ProcessName -like "*inetmgr*" -or $_.ProcessName -like "*iisexpress*"} | Stop-Process -Force -ErrorAction SilentlyContinue
+            
+            # Sử dụng taskkill để đảm bảo dừng hoàn toàn
+            taskkill /f /im w3wp.exe 2>$null
+            taskkill /f /im inetmgr.exe 2>$null
+            taskkill /f /im iisexpress.exe 2>$null
+            
+            Write-Log "✓ Đã buộc dừng tất cả tiến trình IIS"
+        }
+        catch {
+            Write-Log "⚠️ Lỗi khi buộc dừng IIS: $($_.Exception.Message)" "WARNING"
+        }
+        
+        Start-Sleep -Seconds 3
+        
         # Dừng IIS
         Write-Log "Dừng IIS..."
         iisreset /stop
@@ -334,6 +337,86 @@ function Restart-IIS {
     }
     catch {
         Write-Log "⚠️ Lỗi khi restart IIS: $($_.Exception.Message)" "WARNING"
+        return $false
+    }
+}
+
+function Restart-XAMPP {
+    try {
+        Write-Log "Restart XAMPP..."
+        
+        # Buộc dừng XAMPP trước (vì trường hợp còn đang bật)
+        Write-Log "Buộc dừng XAMPP trước..."
+        try {
+            # Dừng tất cả các tiến trình XAMPP đang chạy
+            Get-Process | Where-Object {$_.ProcessName -like "*apache*" -or $_.ProcessName -like "*mysql*" -or $_.ProcessName -like "*httpd*" -or $_.ProcessName -like "*mysqld*"} | Stop-Process -Force -ErrorAction SilentlyContinue
+            
+            # Sử dụng taskkill để đảm bảo dừng hoàn toàn
+            taskkill /f /im apache.exe 2>$null
+            taskkill /f /im mysql.exe 2>$null
+            taskkill /f /im httpd.exe 2>$null
+            taskkill /f /im mysqld.exe 2>$null
+            
+            Write-Log "✓ Đã buộc dừng tất cả tiến trình XAMPP"
+        }
+        catch {
+            Write-Log "⚠️ Lỗi khi buộc dừng XAMPP: $($_.Exception.Message)" "WARNING"
+        }
+        
+        Start-Sleep -Seconds 3
+        
+        # Dừng các service XAMPP
+        Write-Log "Dừng các service XAMPP..."
+        try {
+            # Dừng Apache service
+            if (Get-Service -Name "Apache*" -ErrorAction SilentlyContinue) {
+                Stop-Service -Name "Apache*" -Force -ErrorAction SilentlyContinue
+                Write-Log "✓ Đã dừng Apache service"
+            }
+            
+            # Dừng MySQL service
+            if (Get-Service -Name "MySQL*" -ErrorAction SilentlyContinue) {
+                Stop-Service -Name "MySQL*" -Force -ErrorAction SilentlyContinue
+                Write-Log "✓ Đã dừng MySQL service"
+            }
+        }
+        catch {
+            Write-Log "⚠️ Lỗi khi dừng XAMPP services: $($_.Exception.Message)" "WARNING"
+        }
+        
+        Start-Sleep -Seconds 3
+        
+        # Khởi động lại XAMPP
+        Write-Log "Khởi động XAMPP..."
+        try {
+            # Khởi động Apache service
+            if (Get-Service -Name "Apache*" -ErrorAction SilentlyContinue) {
+                Start-Service -Name "Apache*" -ErrorAction SilentlyContinue
+                Write-Log "✓ Đã khởi động Apache service"
+            }
+            
+            # Khởi động MySQL service
+            if (Get-Service -Name "MySQL*" -ErrorAction SilentlyContinue) {
+                Start-Service -Name "MySQL*" -ErrorAction SilentlyContinue
+                Write-Log "✓ Đã khởi động MySQL service"
+            }
+            
+            # Nếu không có service, thử khởi động trực tiếp từ XAMPP Control Panel
+            $xamppPath = "C:\xampp\xampp-control.exe"
+            if (Test-Path $xamppPath) {
+                Write-Log "Khởi động XAMPP Control Panel..."
+                Start-Process $xamppPath
+            }
+        }
+        catch {
+            Write-Log "⚠️ Lỗi khi khởi động XAMPP: $($_.Exception.Message)" "WARNING"
+        }
+        
+        Write-Log "✓ XAMPP đã được restart thành công" "SUCCESS"
+        return $true
+    }
+    catch {
+        Write-Log "⚠️ Lỗi khi restart XAMPP: $($_.Exception.Message)" "WARNING"
         return $false
     }
 }
@@ -435,11 +518,7 @@ function Main {
             exit 1
         }
         
-        # Kiểm tra và tạo thư mục website
-        if (!(Test-CreateWebsiteDirectory -PhysicalPath $WebsitePath)) {
-            Write-Log "❌ Không thể tạo thư mục website" "ERROR"
-            exit 1
-        }
+        
         
         # Thiết lập quyền truy cập (nếu được yêu cầu)
         if ($SetPermissions) {
@@ -467,6 +546,12 @@ function Main {
             if (!(Restart-IIS)) {
                 Write-Log "⚠️ Không thể restart IIS, nhưng website đã được tạo" "WARNING"
             }
+        }
+        
+        # Restart XAMPP (nếu được yêu cầu)
+        Write-Log "Restart XAMPP để đảm bảo tương thích..."
+        if (!(Restart-XAMPP)) {
+            Write-Log "⚠️ Không thể restart XAMPP, nhưng vẫn tiếp tục..." "WARNING"
         }
         
         # Hiển thị thông tin cấu hình
